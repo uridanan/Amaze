@@ -57,23 +57,39 @@ class Solver:
                 return True
             self.x = self.x + 1
 
+# Returns True if the puzzle is solved
+def isDone():
+    # if self.level.virgin(self.x, self.y):
+    #     self.level.beenThere(self.x, self.y)
+    #     return self.level.decreaseCount()
+    return False
 
-def goRight(self,depth):
-    self.solution.append(1)
-    while self.level.get(self.x,self.y) > 0 and self.y < self.level.getWidth():
-        if self.isDone():
-            return True
-        self.y = self.y + 1
+def goRight(depth,x,y,solution,level):
+    # Move right
+    y1 = y
+    while level.get(x,y1) > 0 and y1 < level.getWidth():
+        if level.virgin(x, y1):
+            level.beenThere(x, y1)
+            level.decreaseCount()
+        y1 = y1 + 1
+    if y1 > y:
+        solution.append(1)
+
+    if level.isDone():
+        return solution
+    else:
+        return next(depth)
 
 
-# TODO : optimize by starting with the longest dimension
+# TODO: optimize by starting with the longest dimension
+# TODO: optimize with multithreading one thread per file
 # Return none if no solution, int[] otherwise
 # Solution length < 101
 def next(depth,x,y,solution,level):
     if depth == 101: # solution exceeds 100 steps
         return None
 
-    right = goRight(depth + 1)
+    right = goRight(depth + 1,x,y,solution,level)
     down = goDown(depth + 1)
     left = goLeft(depth + 1)
     up = goUp(depth + 1)

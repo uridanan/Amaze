@@ -55,6 +55,9 @@ class Level:
         self.count = self.count - 1
         return self.count == 0
 
+    def isDone(self):
+        return self.count == 0
+
     def beenThere(self,x,y):
         self.squares[x][y] = 3
 
