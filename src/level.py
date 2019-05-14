@@ -58,11 +58,16 @@ class Level:
     def isDone(self):
         return self.count == 0
 
-    def beenThere(self,x,y):
+    def color(self,x,y):
         self.squares[x][y] = 3
 
-    def virgin(self,x,y):
-        self.squares[x][y] < 3
+    def colorMe(self,x,y):
+        return self.squares[x][y] < 3 and self.squares[x][y] > 0
+
+    def myWorkHereIsDone(self,x,y):
+        if self.colorMe(x, y):
+            self.color(x, y)
+            self.decreaseCount()
 
     def get(self,x,y):
         return self.squares[x][y]
@@ -78,9 +83,9 @@ class Level:
         return path
 
 
-def debug():
-    cwd = os.getcwd()
-    level1 = Level('../levels/007.xml')
-    print('stop')
+# def debug():
+#     cwd = os.getcwd()
+#     level1 = Level('../levels/007.xml')
+#     print('stop')
 
-debug()
+#debug()
