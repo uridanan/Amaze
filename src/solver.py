@@ -5,65 +5,6 @@ MAX_STEPS = 100
 RIGHT, LEFT, UP, DOWN = 1,2,3,4
 DIRECTIONS = [RIGHT,DOWN,LEFT,UP]
 
-# class cursor:
-#     # 0=white square 1=black square.
-#     # The ball moves on black squares
-#     # x is the index of the row, y the index of the column
-#     # The method should return null if the level is non solveable
-#     # 1 = right, 2= left, 3 = up, 4 = down
-#     solution = []
-#     level = None
-#     x = 0
-#     y = 0
-#
-#     def __init(self,l):
-#         self.level = l
-#         self.x = self.level.ballXStartLocation
-#         self.y = self.level.ballYStartLocation
-#
-#     # Returns True if the puzzle is solved
-#     def isDone(self):
-#         if self.level.virgin(self.x, self.y):
-#             self.level.beenThere(self.x, self.y)
-#             return self.level.decreaseCount()
-#         return False
-#
-#     # Returns True if the puzzle is solved
-#     def goRight(self,depth):
-#         self.solution.append(1)
-#         while self.level.get(self.x,self.y) > 0 and self.y < self.level.getWidth():
-#             if self.isDone():
-#                 return True
-#             self.y = self.y + 1
-#
-#
-#     # Returns True if the puzzle is solved
-#     def goLeft(self,depth):
-#         self.solution.append(2)
-#         while self.level.get(self.x,self.y) > 0 and self.y > -1 :
-#             if self.isDone():
-#                 return True
-#             self.y = self.y - 1
-#
-#     # Returns True if the puzzle is solved
-#     def goUp(self,depth):
-#         self.solution.append(3)
-#         while self.level.get(self.x,self.y) > 0 and self.x > -1:
-#             if self.isDone():
-#                 return True
-#             self.x = self.x - 1
-#
-#     # Returns True if the puzzle is solved
-#     def goDown(self,depth):
-#         self.solution.append(4)
-#         while self.level.get(self.x,self.y) > 0 and self.x < self.level.getHeight():
-#             if self.isDone():
-#                 return True
-#             self.x = self.x + 1
-
-
-
-
 class cursor:
     level = None
     x = 0
@@ -100,20 +41,31 @@ class cursor:
         self.used = True
         self.level.myWorkHereIsDone(self.x, self.y)
 
-    def isWall(self):
-        return self.level.get(self.x, self.y) == 0
+    def peek(self,direction):
+        switcher = {
+            RIGHT: [self.x, self.y + 1],
+            LEFT: [self.x, self.y - 1],
+            UP: [self.x - 1, self.y],
+            DOWN: [self.x + 1, self.y]
+        }
+        return switcher[direction]
 
-    def outOfBounds(self):
-        return self.x == -1 or self.x == self.level.getHeight() or self.y == -1 or self.y == self.level.getWidth()
+    def isWall(self,direction):
+        x, y = self.peek(direction)
+        return self.level.get(x, y) == 0
 
-    def inPlay(self):
-        return not self.isWall() and not self.outOfBounds()
+    def outOfBounds(self,direction):
+        x, y = self.peek(direction)
+        return x == -1 or x == self.level.getHeight() or y == -1 or y == self.level.getWidth()
+
+    def inPlay(self,direction):
+        return not self.isWall(direction) and not self.outOfBounds(direction)
 
 
 def go(direction,x,y,solution,level):
     print("go", direction, x, y, solution)
     cur = cursor(level,x,y)
-    while cur.inPlay():
+    while cur.inPlay(direction):
         cur.step(direction)
     if not cur.used:
         return None
@@ -127,8 +79,9 @@ def go(direction,x,y,solution,level):
 
 
 def noSolution(solution):
-    return len(solution)+1 > MAX_STEPS
+    return safeLen(solution)+1 > MAX_STEPS
 
+# TODO: prevent long loops, why are repeats still happening?
 # TODO: optimize by starting with the longest dimension
 # TODO: optimize with multithreading one thread per file
 # TODO: move methods into level or create a cursor class
@@ -140,16 +93,54 @@ def next(x,y,solution,level):
         return None
 
     #Compute next step
+    usefulDirections = DirectionsFilter(solution).filter()
+
     solutions = {}
-    for d in DIRECTIONS:
+    for d in usefulDirections:
         solutions[d] = go(d,x,y,solution,level)
 
     # Return shortest solution or none
     rVal = None
-    for d in DIRECTIONS:
+    for d in usefulDirections:
         rVal = shorter(rVal,solutions[d])
 
     return rVal
+
+
+class DirectionsFilter:
+    directions = None
+    solution = None
+
+    def __init__(self,solution):
+        self.solution = solution
+        self.directions = DIRECTIONS.copy()
+
+    def rotate(self):
+        first = self.directions[0]
+        del self.directions[0]
+        self.directions.append(first)
+
+    # No point in doing the same direction that just hit a wall
+    def preventRepeats(self):
+        if self.solution is None or len(self.solution) == 0:
+            return
+        self.directions.remove(self.solution[-1])
+
+    def preventLoops(self, d1, d2):
+        if self.solution is None or len(self.solution) < 3:
+            return
+        if self.solution[-1] == d1 and self.solution[-2] == d2 and self.solution[-3] == d1:
+            self.directions.remove(d2)
+
+    def filter(self):
+        self.rotate()
+        self.preventRepeats()
+        self.preventLoops(RIGHT,LEFT)
+        self.preventLoops(LEFT, RIGHT)
+        self.preventLoops(UP, DOWN)
+        self.preventLoops(DOWN, UP)
+        return self.directions
+
 
 def shorter(l1,l2):
     if l1 is None and l2 is None:
@@ -164,9 +155,16 @@ def shorter(l1,l2):
         return l1
 
 
+def safeLen(list):
+    if list is None:
+        return -1
+    return len(list)
+
+
 def start(level):
     empty = []
     solution = next(level.ballXStartLocation,level.ballYStartLocation,empty,level)
+    print("Solution:")
     print(solution)
 
 def debug():
