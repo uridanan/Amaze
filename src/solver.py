@@ -1,7 +1,7 @@
 from src.level import Level
 import os
 
-MAX_STEPS = 100
+MAX_STEPS = 10
 RIGHT, LEFT, UP, DOWN = 1,2,3,4
 DIRECTIONS = [RIGHT,DOWN,LEFT,UP]
 

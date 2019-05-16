@@ -82,10 +82,68 @@ class Level:
         path = []
         return path
 
+    def id(self,x,y):
+        return x*self.getWidth() + y
 
-# def debug():
-#     cwd = os.getcwd()
-#     level1 = Level('../levels/007.xml')
-#     print('stop')
+    def square(self,id):
+        x = id // self.width
+        y = id - x * self.width
+        return [x,y]
 
-#debug()
+    def isWall(self,x,y):
+        return self.squares[x][y] == 0
+
+    def outOfBounds(self,x,y):
+        return x == -1 or x == self.getHeight() or y == -1 or y == self.getWidth()
+
+    def inPlay(self,x,y):
+        return not self.isWall(x,y) and not self.outOfBounds(x,y)
+
+    def buildGraph(self):
+        graph = dict()
+        for x in range(self.height):
+            for y in range(self.width):
+                if self.squares[x][y] > 0:
+                    n = Node(self.id(x, y), x, y)
+                    for d in DIRECTIONS:
+                        nx,ny = n.peek(d)
+                        if self.inPlay(nx,ny):
+                            n.neighbours.append({'node': self.id(nx, ny), 'dir': d})
+                    graph[n.id] = n
+        return graph
+
+
+RIGHT, LEFT, UP, DOWN = 1,2,3,4
+DIRECTIONS = [RIGHT,DOWN,LEFT,UP]
+
+
+class Node:
+    id = -1
+    x = -1
+    y =-1
+    neighbours = []
+
+    def __init__(self,id,x,y):
+        self.id = id
+        self.x = x
+        self.y = y
+
+    def peek(self,direction):
+        switcher = {
+            RIGHT: [self.x, self.y + 1],
+            LEFT: [self.x, self.y - 1],
+            UP: [self.x - 1, self.y],
+            DOWN: [self.x + 1, self.y]
+        }
+        return switcher[direction]
+
+
+
+
+def debug():
+    cwd = os.getcwd()
+    level1 = Level('../levels/007.xml')
+    g = level1.buildGraph()
+    print('stop')
+
+debug()
