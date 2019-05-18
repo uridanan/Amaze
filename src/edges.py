@@ -68,64 +68,38 @@ class Level:
         y = id - x * self.width
         return [x,y]
 
-    def isWall(self,x,y):
-        return self.squares[x][y] == 0
-
-    def outOfBounds(self,x,y):
-        return x == -1 or x == self.height or y == -1 or y == self.width
-
-    def inPlay(self,x,y):
-        return not self.isWall(x,y) and not self.outOfBounds(x,y)
-
-    def isNode(self,x,y,d):
-        pass
-
-
-    def buildGraph(self):
+    # for i in range(10, -6, -2):
+    # for i in reversed(range(5)):
+    def buildEdges(self):
         graph = dict()
+        root = None
+
+        # Build edges for every row when going RIGHT
+        d = RIGHT
         for x in range(self.height):
+            e = None
             for y in range(self.width):
-                if self.squares[x][y] > 0:
-                    n = Node(self.id(x, y), x, y)
-                    for d in DIRECTIONS:
-                        nx,ny = n.peek(d)
-                        if self.inPlay(nx,ny):
-                            n.neighbours.append({'node': self.id(nx, ny), 'dir': d})
-                    graph[n.id] = n
-        return graph
+                if self.squares[x][y] == 0:
+                    if e is not None:
+                        id = self.id(x,y-1)  # create a node for the previous square
+                        n = Node(id, x, y-1)
+                        e.end = n
+                        e = None
+                else:
+                    if e is None:
+                        id = self.id(x, y)
+                        n = Node(id, x, y)
+                        e = Edge(n,d)
+                        n.edges.append(e)
+                        if root is None:
+                            root = n  # there is probably a better way. Push all the nodes to a graph and pop the first one?
+                    e.squares.append(id)
 
 
-    # When building the graph, also build a graph where for every node we store the direction coming into it from other nodes
-    # When adding a neighbor to a node, make sure that the node actually has an entry point
-    # i.e. if n1 has an entry point going RIGHT into it, it can have a neighbor on the RIGHT, but not UP
-    def buildGraphNFlow(self):
-        graph = dict()
-        flow = dict()
-        for x in range(self.height):
-            for y in range(self.width):
-                if self.squares[x][y] > 0:  # node is not a wall
-                    n = Node(self.id(x, y), x, y)
-
-                    # If node next to a wall, add flow
-                    # Each node in graph should have neighbours only for allowed directions
-                    # If node not next to a wall, the only direction is the same that entered the node
-                    for d in DIRECTIONS:
-                        nx,ny = n.peek(d)
-                        if self.isWall(nx,ny):
-                            n.flow[opposite(d)] =
 
 
-                    for d in DIRECTIONS:
-                        nx,ny = n.peek(d)
-                        if self.inPlay(nx,ny):
-                            nId = self.id(nx, ny)
-                            n.neighbours.append({'node': nId, 'dir': d})
 
-                            nb = Node(nId, nx, ny)
-                            nb.neighbours.append({'node': nId, 'dir': opposite(d)})
-                            flow[nId] = nb
-                    graph[n.id] = n
-        return graph
+
 
 def opposite(direction):
     switcher = {
@@ -141,6 +115,7 @@ class Node:
     x = -1
     y =-1
     neighbours = []
+    edges = []
 
     #Flow returns an array of the directions available from the node when entering from a given direction
     flow = {
@@ -165,6 +140,17 @@ class Node:
         return switcher[direction]
 
 
+class Edge:
+    start = None  # a node
+    end = None  # a node
+    dir = None  # a direction
+    squares = []  # a list of square Ids
+
+    def __init__(self,node,d):
+        self.start = node
+        self.dir = d
+
+
 def start(graph):
     if graph is None or len(graph.keys()) < 1:
         return None
@@ -176,6 +162,8 @@ def start(graph):
     print("Done")
 
 
+# TODO: Pop squares traversed by edges, not Nodes
+# TODO: iterate edges, not neighbours
 def traverse(root,graph,visited,path):
 
     # If graph is empty, we are done
