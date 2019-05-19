@@ -68,37 +68,88 @@ class Level:
         y = id - x * self.width
         return [x,y]
 
-    # for i in range(10, -6, -2):
-    # for i in reversed(range(5)):
+    def openEdge(self,x,y,d):
+        id = self.id(x, y)
+        n = Node(id, x, y)
+        e = Edge(n,d)
+        n.edges.append(e)
+        return e
+
+    def closeEdge(self,x,y):
+        id = self.id(x,y)  # create a node for the previous square
+        n = Node(id,x,y)
+        e.end = n
+        return None
+
+    def processSquare(self,x,y,d,e,root):
+        if self.squares[x][y] == 0:
+            if e is not None:
+                # create a node for the previous square
+                ex,ey = self.peek(opposite(d))
+                e = self.closeEdge(ex,ey)
+        else:
+            if e is None:
+                e = self.openEdge(x,y,d)
+                if root is None:
+                    root = n  # there is probably a better way. Push all the nodes to a graph and pop the first one?
+            e.squares.append(id)
+        return root,e
+
     def buildEdges(self):
         graph = dict()
         root = None
 
+        # for i in range(10, -6, -2):
+        # for i in reversed(range(5)):
+        dimensions = {
+            RIGHT: [self.height,self.width,1],
+            LEFT: [self.height,-self.width,-1],
+            DOWN: [self.width,self.height,1],
+            UP: [self.width,-self.height,-1]
+        }
+
+        for d in DIRECTIONS:
+            range = dimensions[d]
+            for x in range(0,range[0],1):
+                e = None
+                for y in range(0,range[1],range[2]):
+                    sx,sy = swap(x,y,d)
+                    root,e = self.processSquare(sx,sy,d,e,root)
+
         # Build edges for every row when going RIGHT
-        d = RIGHT
-        for x in range(self.height):
-            e = None
-            for y in range(self.width):
-                if self.squares[x][y] == 0:
-                    if e is not None:
-                        id = self.id(x,y-1)  # create a node for the previous square
-                        n = Node(id, x, y-1)
-                        e.end = n
-                        e = None
-                else:
-                    if e is None:
-                        id = self.id(x, y)
-                        n = Node(id, x, y)
-                        e = Edge(n,d)
-                        n.edges.append(e)
-                        if root is None:
-                            root = n  # there is probably a better way. Push all the nodes to a graph and pop the first one?
-                    e.squares.append(id)
+        # d = RIGHT
+        # for x in range(self.height):
+        #     e = None
+        #     for y in range(self.width):
+        #         root,e = self.processSquare(x,y,d,e,root)
+        #
+        # d = LEFT
+        # for x in range(self.height):
+        #     e = None
+        #     for y in reversed(range(self.width)):
+        #         root,e = self.processSquare(x,y,d,e,root)
+        #
+        # d = DOWN
+        # for y in range(self.width):
+        #     e = None
+        #     for x in range(self.height):
+        #         root,e = self.processSquare(x,y,d,e,root)
+        #
+        # d = UP
+        # for y in range(self.width):
+        #     e = None
+        #     for x in reversed(range(self.height)):
+        #         root,e = self.processSquare(x,y,d,e,root)
 
 
 
 
 
+def swap(x,y,d):
+    if d == LEFT or d == RIGHT:
+        return x,y
+    else:
+        return y,x
 
 
 def opposite(direction):
@@ -109,6 +160,7 @@ def opposite(direction):
         DOWN: UP
     }
     return switcher[direction]
+    
 
 class Node:
     id = -1
@@ -164,29 +216,31 @@ def start(graph):
 
 # TODO: Pop squares traversed by edges, not Nodes
 # TODO: iterate edges, not neighbours
-def traverse(root,graph,visited,path):
+def traverse(root,squares,path):
 
     # If graph is empty, we are done
-    if root is None:
+    if safeLen(squares) == 0:
         print("Graph is empty")
-        return path, visited
+        return path
 
     # If path exceeds limit, there is no solution here
     if safeLen(path) > MAX_STEPS:
         print("Path exceeds limit")
-        return None, visited
+        return None
+
+    # If root is none: error, should not happen
+    if root is None:
+        print("ERROR ! Invalid root")
+        return None
 
     # Mark our visit here
-    visited[root.id] = root
-    graph.pop(root.id, None)
+    squares.pop(root.id, None)
 
     # Visit the neighbours
     paths = {}
-    for nb in root.neighbours:
-        if safeLen(path) < 1 or nb['dir'] != path[-1]:
-            path.append(nb['dir'])
-        node = graph.get(nb['node'],None)
-        paths[nb['dir']] = traverse(node,graph,visited,path)
+    for e in root.edges:
+        path.append(e.dir)
+        paths[e.dir] = traverse(e.end,squares,path)
 
     path = None
     for p in paths.values():
