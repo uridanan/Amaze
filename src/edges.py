@@ -73,9 +73,9 @@ class Level:
         n = Node(id, x, y)
         e = Edge(n,d)
         n.edges.append(e)
-        return e
+        return e,n
 
-    def closeEdge(self,x,y):
+    def closeEdge(self,x,y,e):
         id = self.id(x,y)  # create a node for the previous square
         n = Node(id,x,y)
         e.end = n
@@ -85,17 +85,17 @@ class Level:
         if self.squares[x][y] == 0:
             if e is not None:
                 # create a node for the previous square
-                ex,ey = self.peek(opposite(d))
-                e = self.closeEdge(ex,ey)
+                ex,ey = Node(id,x,y).peek(opposite(d))
+                e = self.closeEdge(ex,ey,e)
         else:
             if e is None:
-                e = self.openEdge(x,y,d)
+                e,n = self.openEdge(x,y,d)
                 if root is None:
                     root = n  # there is probably a better way. Push all the nodes to a graph and pop the first one?
-            e.squares.append(id)
+            e.squares.append(self.id(x,y))
         return root,e
 
-    def buildEdges(self):
+    def buildGraph(self):
         graph = dict()
         root = None
 
@@ -109,12 +109,15 @@ class Level:
         }
 
         for d in DIRECTIONS:
-            range = dimensions[d]
-            for x in range(0,range[0],1):
+            dim = dimensions[d]
+            for x in range(0,dim[0],1):
                 e = None
-                for y in range(0,range[1],range[2]):
+                for y in range(0,dim[1],dim[2]):
                     sx,sy = swap(x,y,d)
                     root,e = self.processSquare(sx,sy,d,e,root)
+
+        return root
+
 
         # Build edges for every row when going RIGHT
         # d = RIGHT
@@ -141,6 +144,13 @@ class Level:
         #     for x in reversed(range(self.height)):
         #         root,e = self.processSquare(x,y,d,e,root)
 
+    def getSquares(self):
+        squares = []
+        for x in range(self.height):
+            for y in range(self.width):
+                if self.squares[x][y] > 0:
+                    squares.append(self.id(x,y))
+        return squares
 
 
 
@@ -166,16 +176,8 @@ class Node:
     id = -1
     x = -1
     y =-1
-    neighbours = []
     edges = []
 
-    #Flow returns an array of the directions available from the node when entering from a given direction
-    flow = {
-        RIGHT: [],
-        LEFT: [],
-        UP: [],
-        DOWN: []
-    }
 
     def __init__(self,id,x,y):
         self.id = id
@@ -203,14 +205,10 @@ class Edge:
         self.dir = d
 
 
-def start(graph):
-    if graph is None or len(graph.keys()) < 1:
-        return None
+def start(root,level):
     path = []
-    visited = dict()
-    rootId = min(graph.keys())
-    root = graph.get(rootId, None)
-    path = traverse(root,graph,visited,path)
+    squares = level.getSquares()
+    path = traverse(root,squares,path)
     print("Done")
 
 
@@ -234,7 +232,7 @@ def traverse(root,squares,path):
         return None
 
     # Mark our visit here
-    squares.pop(root.id, None)
+    squares.pop(root.id)
 
     # Visit the neighbours
     paths = {}
@@ -274,8 +272,8 @@ def safeLen(list):
 def debug():
     cwd = os.getcwd()
     level1 = Level('../levels/007.xml')
-    g = level1.buildGraph()
-    start(g)
+    root = level1.buildGraph()
+    start(root,level1)
     print('stop')
 
 debug()
