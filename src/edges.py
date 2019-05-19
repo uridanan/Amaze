@@ -25,7 +25,7 @@ import os
 
 RIGHT, LEFT, UP, DOWN = 1,2,3,4
 DIRECTIONS = [RIGHT,DOWN,LEFT,UP]
-MAX_STEPS = 10
+MAX_STEPS = 20
 
 class Level:
     # 0=white square 1=black square.
@@ -35,7 +35,9 @@ class Level:
     width = 0
     height = 0
     data = None
-    graph = dict()
+    graph = None
+    edges = None
+    nodes = None
 
     def __init__(self,filename):
         self.load(filename)
@@ -68,89 +70,128 @@ class Level:
         y = id - x * self.width
         return [x,y]
 
-    def openEdge(self,x,y,d):
+    # Lookup the node, create new if not found
+    def getNode(self,x,y):
         id = self.id(x, y)
-        n = Node(id, x, y)
+        #n = self.nodes.get(id,None)
+        n = self.graph.get(id,None)
+        if n is None:
+            n = Node(id,x,y)
+            self.graph[n.id] = n
+            #self.nodes[n.id] = n
+        return n
+
+    def openEdge(self,x,y,d):
+        n = self.getNode(x,y)
         e = Edge(n,d)
         n.edges.append(e)
-        return e,n
+        self.edges.append(e)
+        return e
 
     def closeEdge(self,x,y,e):
-        id = self.id(x,y)  # create a node for the previous square
-        n = Node(id,x,y)
-        e.end = n
+        n = self.getNode(x, y)
+        e.end = n.id
         return None
 
-    def processSquare(self,x,y,d,e,root):
+    def processSquare(self,x,y,d,e):
         if self.squares[x][y] == 0:
             if e is not None:
-                # create a node for the previous square
+                # create a node for the previous square and close the edge
                 ex,ey = Node(id,x,y).peek(opposite(d))
-                e = self.closeEdge(ex,ey,e)
+                if safeLen(e.squares) > 1:
+                    e = self.closeEdge(ex,ey,e)
         else:
             if e is None:
-                e,n = self.openEdge(x,y,d)
-                if root is None:
-                    root = n  # there is probably a better way. Push all the nodes to a graph and pop the first one?
+                # create a new node and edge
+                e = self.openEdge(x,y,d)
             e.squares.append(self.id(x,y))
-        return root,e
+        return e
 
-    # BUG: new instances of n and e retain data from previous instances.
+    # TODO: fix findOrthogonalEdges
     def buildGraph(self):
-        graph = dict()
-        root = None
+        self.graph = dict()
+        #self.nodes = dict()
+        self.edges = []
 
         # for i in range(10, -6, -2):
         # for i in reversed(range(5)):
         dimensions = {
-            RIGHT: [self.height,self.width,1],
-            LEFT: [self.height,-self.width,-1],
-            DOWN: [self.width,self.height,1],
-            UP: [self.width,-self.height,-1]
+            RIGHT: [0,self.height,1,0,self.width,1],
+            LEFT: [0,self.height,1,self.width-1,-1,-1],
+            DOWN: [0,self.width,1,0,self.height,1],
+            UP: [0,self.width,1,self.height-1,-1,-1]
         }
 
         for d in DIRECTIONS:
             dim = dimensions[d]
-            for x in range(0,dim[0],1):
+            for x in range(dim[0],dim[1],dim[2]):
                 e = None
-                for y in range(0,dim[1],dim[2]):
+                for y in range(dim[3],dim[4],dim[5]):
                     sx,sy = swap(x,y,d)
-                    root,e = self.processSquare(sx,sy,d,e,root)
+                    e = self.processSquare(sx,sy,d,e)
 
-        return root
+        self.findAllOrthogonalEdges()
+
+        return self.graph
+
+    # TODO: Circular infinite loop: iterate edges while adding edges
+    def findAllOrthogonalEdges(self):
+        orthogonalEdges = []
+        iter = self.edges.values()
+        for e in iter:
+            oEdges = self.findOrthogonalEdges(e)
+            orthogonalEdges.extend(oEdges)
+        return orthogonalEdges
 
 
-        # Build edges for every row when going RIGHT
-        # d = RIGHT
-        # for x in range(self.height):
-        #     e = None
-        #     for y in range(self.width):
-        #         root,e = self.processSquare(x,y,d,e,root)
-        #
-        # d = LEFT
-        # for x in range(self.height):
-        #     e = None
-        #     for y in reversed(range(self.width)):
-        #         root,e = self.processSquare(x,y,d,e,root)
-        #
-        # d = DOWN
-        # for y in range(self.width):
-        #     e = None
-        #     for x in range(self.height):
-        #         root,e = self.processSquare(x,y,d,e,root)
-        #
-        # d = UP
-        # for y in range(self.width):
-        #     e = None
-        #     for x in reversed(range(self.height)):
-        #         root,e = self.processSquare(x,y,d,e,root)
+    # Some nodes can only be starting nodes because they close an edge
+    def findOrthogonalEdges(self,e):
+        orthogonalEdges = []
+
+        n = self.graph.get(e.end,None)
+        if n is None:
+            return []
+
+        orthogonalDirections = {
+            RIGHT: [UP,DOWN],
+            LEFT: [UP, DOWN],
+            UP: [LEFT,RIGHT],
+            DOWN: [LEFT, RIGHT]
+        }
+
+        dimensions = {
+            RIGHT: [n.y,self.width,1],
+            LEFT: [n.y,-1,-1],
+            DOWN: [n.x,self.height,1],
+            UP: [n.x,-1,-1]
+        }
+
+        for d in orthogonalDirections[e.dir]:
+            # No point in trying blocked directions
+            nx,ny = n.peek(d)
+            if self.squares[nx][ny] == 0:
+                continue
+
+            dim = dimensions[d]
+            orth = None
+            for z in range(dim[0], dim[1], dim[2]):
+                if d in [RIGHT,LEFT]:
+                    x,y = n.x,z
+                else:
+                    x,y = z,n.y
+                orth = self.processSquare(x, y, d, orth)
+            if orth is not None and orth.end is not None:
+                orthogonalEdges.append(orth)
+
+        return orthogonalEdges
+
 
     def getSquares(self):
-        squares = []
+        squares = {}
         for x in range(self.height):
             for y in range(self.width):
                 if self.squares[x][y] > 0:
-                    squares.append(self.id(x,y))
+                    squares[self.id(x,y)] = 1
         return squares
 
 
@@ -177,13 +218,14 @@ class Node:
     id = -1
     x = -1
     y =-1
-    edges = []
+    edges = None
 
 
     def __init__(self,id,x,y):
         self.id = id
         self.x = x
         self.y = y
+        self.edges = []
 
     def peek(self,direction):
         switcher = {
@@ -199,23 +241,37 @@ class Edge:
     start = None  # a node
     end = None  # a node
     dir = None  # a direction
-    squares = []  # a list of square Ids
+    squares = None  # a list of square Ids
 
     def __init__(self,node,d):
-        self.start = node
+        self.start = node.id
         self.dir = d
+        self.end = None
+        self.squares = []
 
 
-def start(root,level):
+def getRoot(graph):
+    if graph is None or len(graph.keys()) < 1:
+        return None
+    rootId = min(graph.keys())
+    root = graph.get(rootId, None)
+    return root
+
+
+def start(graph,level):
     path = []
     squares = level.getSquares()
-    path = traverse(root,squares,path)
+    root = getRoot(graph)
+    path = traverse(root,squares,path,graph)
+    print(path)
     print("Done")
 
 
-# TODO: Pop squares traversed by edges, not Nodes
-# TODO: iterate edges, not neighbours
-def traverse(root,squares,path):
+
+# Pop squares traversed by edges, not Nodes
+# Iterate edges, not neighbours
+# TODO: Prevent obvious loops
+def traverse(root,squares,path,graph):
 
     # If graph is empty, we are done
     if safeLen(squares) == 0:
@@ -233,13 +289,17 @@ def traverse(root,squares,path):
         return None
 
     # Mark our visit here
-    squares.pop(root.id)
+    squares.pop(root.id,None)
 
     # Visit the neighbours
     paths = {}
     for e in root.edges:
         path.append(e.dir)
-        paths[e.dir] = traverse(e.end,squares,path)
+        for s in e.squares:
+            squares.pop(s, None)
+        next = graph.get(e.end,None)
+        paths[e.dir] = traverse(next,squares,path,graph)
+
 
     path = None
     for p in paths.values():
