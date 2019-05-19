@@ -95,6 +95,7 @@ class Level:
             e.squares.append(self.id(x,y))
         return root,e
 
+    # BUG: new instances of n and e retain data from previous instances.
     def buildGraph(self):
         graph = dict()
         root = None
