@@ -84,13 +84,14 @@ class Level:
     def openEdge(self,x,y,d):
         n = self.getNode(x,y)
         e = Edge(n,d)
-        n.edges.append(e)
-        self.edges.append(e)
+        n.edges[e.getId()] = e
+        self.edges[e.getId()] = e
         return e
 
     def closeEdge(self,x,y,e):
         n = self.getNode(x, y)
-        e.end = n.id
+        e.end = n
+        print("Close Edge: %d,%d" % (e.start.id,e.end.id))
         return None
 
     def processSquare(self,x,y,d,e):
@@ -111,7 +112,7 @@ class Level:
     def buildGraph(self):
         self.graph = dict()
         #self.nodes = dict()
-        self.edges = []
+        self.edges = dict()
 
         # for i in range(10, -6, -2):
         # for i in reversed(range(5)):
@@ -136,21 +137,20 @@ class Level:
 
     # TODO: Circular infinite loop: iterate edges while adding edges
     def findAllOrthogonalEdges(self):
-        orthogonalEdges = []
+        print("Search for orthogonal edges")
         iter = self.edges.values()
         for e in iter:
-            oEdges = self.findOrthogonalEdges(e)
-            orthogonalEdges.extend(oEdges)
-        return orthogonalEdges
-
+            self.findOrthogonalEdges(e)
 
     # Some nodes can only be starting nodes because they close an edge
     def findOrthogonalEdges(self,e):
-        orthogonalEdges = []
+        if e is None or e.end is None:
+            print("ERROR ! Invalid open edge")
+            return
 
-        n = self.graph.get(e.end,None)
+        n = self.graph.get(e.end.id,None)
         if n is None:
-            return []
+            return
 
         orthogonalDirections = {
             RIGHT: [UP,DOWN],
@@ -180,11 +180,6 @@ class Level:
                 else:
                     x,y = z,n.y
                 orth = self.processSquare(x, y, d, orth)
-            if orth is not None and orth.end is not None:
-                orthogonalEdges.append(orth)
-
-        return orthogonalEdges
-
 
     def getSquares(self):
         squares = {}
@@ -225,7 +220,7 @@ class Node:
         self.id = id
         self.x = x
         self.y = y
-        self.edges = []
+        self.edges = dict()
 
     def peek(self,direction):
         switcher = {
@@ -244,10 +239,18 @@ class Edge:
     squares = None  # a list of square Ids
 
     def __init__(self,node,d):
-        self.start = node.id
+        self.start = node
         self.dir = d
         self.end = None
         self.squares = []
+
+    def getId(self):
+        s = e = -1
+        if self.start is not None:
+            s = self.start.id
+        if self.end is not None:
+            e = self.end.id
+        return (s,e)
 
 
 def getRoot(graph):
@@ -263,15 +266,18 @@ def start(graph,level):
     squares = level.getSquares()
     root = getRoot(graph)
     path = traverse(root,squares,path,graph)
-    print(path)
+    print("Solution: %s" % path)
     print("Done")
 
 
 
 # Pop squares traversed by edges, not Nodes
 # Iterate edges, not neighbours
-# TODO: Prevent obvious loops
+# TODO: Try BFS against DFS
+# TODO: why do I have edges with end == -1 ??? Because I use the id before closing the edge. Cleanup edges or add them on close only?
+# --> I need to add the edges on close !!!
 def traverse(root,squares,path,graph):
+    print(path)
 
     # If graph is empty, we are done
     if safeLen(squares) == 0:
@@ -289,23 +295,45 @@ def traverse(root,squares,path,graph):
         return None
 
     # Mark our visit here
-    squares.pop(root.id,None)
+    found = squares.pop(root.id,None)
+
+    # We're stuck in a loop, no solution here
+    if found is None and isStuckInLoop(path):
+        print("ERROR ! Stuck in loop")
+        return None
 
     # Visit the neighbours
     paths = {}
-    for e in root.edges:
+    reverse = None
+    for e in root.edges.values():
+        if safeLen(path) > 1 and e.dir == opposite(path[-1]):
+            # leave the return path for last
+            reverse = e
+        else:
+            path.append(e.dir)
+            for s in e.squares:
+                squares.pop(s, None)
+            paths[e.dir] = traverse(e.end,squares,path,graph)
+    # Process the return edge
+    if reverse is not None:
+        e = reverse
         path.append(e.dir)
-        for s in e.squares:
-            squares.pop(s, None)
-        next = graph.get(e.end,None)
-        paths[e.dir] = traverse(next,squares,path,graph)
-
+        paths[e.dir] = traverse(e.end, squares, path, graph)
 
     path = None
     for p in paths.values():
         path = shorter(path, p)
 
     return path
+
+
+def isStuckInLoop(path):
+    if path is None or len(path) < 3:
+        return False
+    if path[-1] == path[-3] and path[-2] == opposite(path[-1]):
+        return True
+    else:
+        return False
 
 
 def shorter(l1,l2):

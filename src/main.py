@@ -112,7 +112,7 @@ class Level:
                     for d in DIRECTIONS:
                         nx,ny = n.peek(d)
                         if self.isWall(nx,ny):
-                            n.flow[opposite(d)] =
+                            n.flow[opposite(d)]
 
 
                     for d in DIRECTIONS:
