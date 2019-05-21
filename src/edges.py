@@ -25,7 +25,7 @@ import os
 
 RIGHT, LEFT, UP, DOWN = 1,2,3,4
 DIRECTIONS = [RIGHT,DOWN,LEFT,UP]
-MAX_STEPS = 20
+MAX_STEPS = 5
 
 class Level:
     # 0=white square 1=black square.
@@ -84,13 +84,13 @@ class Level:
     def openEdge(self,x,y,d):
         n = self.getNode(x,y)
         e = Edge(n,d)
-        n.edges[e.getId()] = e
-        self.edges[e.getId()] = e
         return e
 
     def closeEdge(self,x,y,e):
         n = self.getNode(x, y)
         e.end = n
+        e.start.edges[e.getId()] = e
+        self.edges[e.getId()] = e
         print("Close Edge: %d,%d" % (e.start.id,e.end.id))
         return None
 
@@ -108,7 +108,6 @@ class Level:
             e.squares.append(self.id(x,y))
         return e
 
-    # TODO: fix findOrthogonalEdges
     def buildGraph(self):
         self.graph = dict()
         #self.nodes = dict()
@@ -138,8 +137,7 @@ class Level:
     # TODO: Circular infinite loop: iterate edges while adding edges
     def findAllOrthogonalEdges(self):
         print("Search for orthogonal edges")
-        iter = self.edges.values()
-        for e in iter:
+        for e in list(self.edges.values()):
             self.findOrthogonalEdges(e)
 
     # Some nodes can only be starting nodes because they close an edge
@@ -261,6 +259,21 @@ def getRoot(graph):
     return root
 
 
+def startBFS(graph):
+    r = getRoot(graph)
+    path = []
+    solution = bfs(graph,[r],path)
+
+
+def bfs(graph,nodes,path):
+    next = []
+    for n in nodes:
+        for e in n.edges:
+            next.append(e.end)
+    return path
+
+
+
 def start(graph,level):
     path = []
     squares = level.getSquares()
@@ -270,12 +283,12 @@ def start(graph,level):
     print("Done")
 
 
-
 # Pop squares traversed by edges, not Nodes
 # Iterate edges, not neighbours
 # TODO: Try BFS against DFS
-# TODO: why do I have edges with end == -1 ??? Because I use the id before closing the edge. Cleanup edges or add them on close only?
-# --> I need to add the edges on close !!!
+# TODO: Why won't it try [1,4,2,4,1,3,2,1,2,3,1] ?
+# TODO: why won't stop at MAX_STEPS? why won't try 1,4,2,4?
+# TODO: how do I handle path is None on return?
 def traverse(root,squares,path,graph):
     print(path)
 
@@ -310,21 +323,20 @@ def traverse(root,squares,path,graph):
             # leave the return path for last
             reverse = e
         else:
-            path.append(e.dir)
             for s in e.squares:
                 squares.pop(s, None)
-            paths[e.dir] = traverse(e.end,squares,path,graph)
+            # don't append on same instance otherwise it is shared between all siblings. i.e. siblings are queued instead of replacing each other
+            paths[e.dir] = traverse(e.end,squares,list(path).append(e.dir),graph)
     # Process the return edge
     if reverse is not None:
         e = reverse
-        path.append(e.dir)
-        paths[e.dir] = traverse(e.end, squares, path, graph)
+        paths[e.dir] = traverse(e.end, squares, list(path).append(e.dir), graph)
 
-    path = None
+    newpath = None
     for p in paths.values():
-        path = shorter(path, p)
+        newpath = shorter(newpath, p)
 
-    return path
+    return newpath
 
 
 def isStuckInLoop(path):
@@ -353,6 +365,7 @@ def safeLen(list):
     if list is None:
         return -1
     return len(list)
+
 
 # TODO: make sure not to include nodes / neigbours in the graph when you can't stop on them
 # TODO: use MAX_STEPS as a parameter to find the solution faster
