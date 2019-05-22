@@ -21,11 +21,12 @@
 
 import xml.etree.ElementTree as ET
 import os
+from copy import deepcopy
 
 
 RIGHT, LEFT, UP, DOWN = 1,2,3,4
 DIRECTIONS = [RIGHT,DOWN,LEFT,UP]
-MAX_STEPS = 5
+MAX_STEPS = 12
 
 class Level:
     # 0=white square 1=black square.
@@ -287,19 +288,24 @@ def start(graph,level):
 # Iterate edges, not neighbours
 # TODO: Try BFS against DFS
 # TODO: Why won't it try [1,4,2,4,1,3,2,1,2,3,1] ?
-# TODO: why won't stop at MAX_STEPS? why won't try 1,4,2,4?
-# TODO: how do I handle path is None on return?
+# TODO: find out why I have fake solutions
+# TODO: traverse edges, not nodes?
 def traverse(root,squares,path,graph):
-    print(path)
+    #print(path)
 
     # If graph is empty, we are done
     if safeLen(squares) == 0:
-        print("Graph is empty")
+        #print("Graph is empty")
+        print("Solved by: %s " % path)
         return path
+
+    if path is None:
+        print("ERROR! Path is None")
+        return None
 
     # If path exceeds limit, there is no solution here
     if safeLen(path) > MAX_STEPS:
-        print("Path exceeds limit")
+        #print("Path exceeds limit")
         return None
 
     # If root is none: error, should not happen
@@ -312,7 +318,7 @@ def traverse(root,squares,path,graph):
 
     # We're stuck in a loop, no solution here
     if found is None and isStuckInLoop(path):
-        print("ERROR ! Stuck in loop")
+        #print("ERROR ! Stuck in loop")
         return None
 
     # Visit the neighbours
@@ -326,11 +332,17 @@ def traverse(root,squares,path,graph):
             for s in e.squares:
                 squares.pop(s, None)
             # don't append on same instance otherwise it is shared between all siblings. i.e. siblings are queued instead of replacing each other
-            paths[e.dir] = traverse(e.end,squares,list(path).append(e.dir),graph)
+            p = list(path)
+            p.append(e.dir)
+            sq = deepcopy(squares)
+            paths[e.dir] = traverse(e.end,sq,p,graph)
     # Process the return edge
     if reverse is not None:
         e = reverse
-        paths[e.dir] = traverse(e.end, squares, list(path).append(e.dir), graph)
+        p = list(path)
+        p.append(e.dir)
+        sq = deepcopy(squares)
+        paths[e.dir] = traverse(e.end, sq, p, graph)
 
     newpath = None
     for p in paths.values():
