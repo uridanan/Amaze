@@ -28,6 +28,7 @@ from copy import deepcopy
 
 RIGHT, LEFT, UP, DOWN = 1,2,3,4
 DIRECTIONS = [RIGHT,DOWN,LEFT,UP]
+MAX_VISITS = 7
 
 class Level:
     # 0=white square 1=black square.
@@ -216,7 +217,7 @@ def opposite(direction):
         UP: DOWN,
         DOWN: UP
     }
-    return switcher[direction]
+    return switcher.get(direction,0)
     
 
 class Node:
@@ -248,12 +249,14 @@ class Edge:
     end = None  # a node
     dir = None  # a direction
     squares = None  # a list of square Ids
+    visited = 0
 
     def __init__(self,node,d):
         self.start = node
         self.dir = d
         self.end = None
         self.squares = []
+        self.visited = 0
 
     def getId(self):
         s = e = -1
@@ -271,22 +274,6 @@ def getRoot(graph):
     root = graph.get(rootId, None)
     return root
 
-
-def start(filename):
-    MAX_STEPS = 25
-    started = time.process_time()
-    path = []
-    level = Level(filename)
-    graph = level.buildGraph()
-    squares = level.getSquares()
-    root = getRoot(graph)
-    if noSolution(level,graph):
-        path = None
-    else:
-        path = traverse(root,squares,path,graph,MAX_STEPS)
-    elapsedTime = time.process_time() - started
-    print("%s: %s, %s" % (filename, elapsedTime, path))
-    #print("Done")
 
 
 # Find unsolvable levels
@@ -314,6 +301,43 @@ def noSolution(level,graph):
     return False
 
 
+
+# Traverse all nodes without going back just to see if I can cover all the squares
+def isSolvable(root,squares,graph):
+    #print(path)
+
+    # If graph is empty, we are done
+    if safeLen(squares) == 0:
+        #print("Graph is empty")
+        #print("Solved by: %s " % path)
+        return True
+
+    # No more nodes but we haven't covered all squares
+    if graph is None or safeLen(graph.keys()) < 1:
+        return False
+
+    # If root is none: error, should not happen
+    if root is None:
+        print("ERROR ! Invalid root")
+        return False
+
+    # If node is no longer in graph we were already here
+    n = graph.pop(root.id, None)
+    if n is None:
+        return False
+
+    # Visit the neighbours
+    success = False
+
+    for e in root.edges.values():
+        for s in e.squares:
+            squares.pop(s, None)
+        if isSolvable(e.end,squares,graph):
+            return True
+
+    return success
+
+
 # Pop squares traversed by edges, not Nodes
 # Iterate edges, not neighbours
 def traverse(root,squares,path,graph,max):
@@ -322,11 +346,11 @@ def traverse(root,squares,path,graph,max):
     # If graph is empty, we are done
     if safeLen(squares) == 0:
         #print("Graph is empty")
-        #print("Solved by: %s " % path)
+        print("Solved by: %s " % path)
         return path
 
     if path is None:
-        print("ERROR! Path is None")
+        #print("ERROR! Path is None")
         return None
 
     # If path exceeds limit or current solution, there is no solution here
@@ -336,7 +360,7 @@ def traverse(root,squares,path,graph,max):
 
     # If root is none: error, should not happen
     if root is None:
-        print("ERROR ! Invalid root")
+        #print("ERROR ! Invalid root")
         return None
 
     # We're stuck in a loop, no solution here
@@ -348,7 +372,9 @@ def traverse(root,squares,path,graph,max):
     paths = {}
     reverse = None
     for e in root.edges.values():
-        if safeLen(path) > 1 and e.dir == opposite(path[-1]):
+        if e.visited > MAX_VISITS: # if we've visited this edge too many times already we must be in a loop
+            continue
+        elif safeLen(path) > 1 and e.dir == opposite(path[-1]):
             # leave the return path for last
             reverse = e
         else:
@@ -358,6 +384,7 @@ def traverse(root,squares,path,graph,max):
             copyOfSquares = deepcopy(squares)
             for s in e.squares:
                 copyOfSquares.pop(s, None)
+            e.visited = e.visited + 1
             paths[e.dir] = traverse(e.end,copyOfSquares,copyOfPath,graph,max)
             if paths[e.dir] is not None and len(paths[e.dir]) < max:
                 max = len(paths[e.dir])
@@ -368,6 +395,7 @@ def traverse(root,squares,path,graph,max):
         copyOfPath = list(path)
         copyOfPath.append(e.dir)
         copyOfSquares = deepcopy(squares)
+        e.visited = e.visited + 1
         paths[e.dir] = traverse(e.end, copyOfSquares, copyOfPath, graph, max)
         if paths[e.dir] is not None and len(paths[e.dir]) < max:
             max = len(paths[e.dir])
@@ -408,39 +436,58 @@ def safeLen(list):
     return len(list)
 
 
-# TODO: find more ways to identify unsolvable levels
+def start(filename):
+    MAX_STEPS = 50
+    started = time.process_time()
+    path = []
+    level = Level(filename)
+    graph = level.buildGraph()
+    squares = level.getSquares()
+    root = getRoot(graph)
+    # if noSolution(level,graph):
+    # if isSolvable(root,deepcopy(squares),deepcopy(graph)) is False:
+    #     path = None
+    # else:
+    #     path = traverse(root,squares,path,graph,MAX_STEPS)
+    path = traverse(root, squares, path, graph, MAX_STEPS)
+    elapsedTime = time.process_time() - started
+    print("%s: %s, %s" % (filename, elapsedTime, path))
+    #print("Done")
+
+
+
 def debug():
     #cwd = os.getcwd()
     fileNames = [
-        '../levels/001.xml',
-        '../levels/002.xml',
-        '../levels/003.xml',
-        '../levels/004.xml',
-        '../levels/005.xml',
-        '../levels/006.xml',
-        '../levels/007.xml',
-        '../levels/008.xml',
-        '../levels/009.xml',
-        '../levels/010.xml',
-        '../levels/011.xml',
-        '../levels/012.xml',
-        '../levels/013.xml',
-        '../levels/014.xml',
-        '../levels/015.xml',
-        '../levels/016.xml',
-        '../levels/017.xml',
-        '../levels/018.xml',
-        '../levels/019.xml',
-        '../levels/020.xml',
-        '../levels/021.xml',
-        '../levels/022.xml',
-        '../levels/023.xml',
-        '../levels/024.xml',
-        '../levels/025.xml',
-        '../levels/026.xml',
-        '../levels/027.xml',
-        '../levels/028.xml',
-        '../levels/029.xml'
+        # '../levels/001.xml',
+        '../levels/002.xml'
+        # '../levels/003.xml',
+        # '../levels/004.xml',
+        # '../levels/005.xml',
+        # '../levels/006.xml',
+        # '../levels/007.xml',
+        # '../levels/008.xml',
+        # '../levels/009.xml',
+        # '../levels/010.xml',
+        # '../levels/011.xml',
+        # '../levels/012.xml',
+        # '../levels/013.xml',
+        # '../levels/014.xml',
+        # '../levels/015.xml',
+        # '../levels/016.xml',
+        # '../levels/017.xml',
+        # '../levels/018.xml',
+        # '../levels/019.xml',
+        # '../levels/020.xml',
+        # '../levels/021.xml',
+        # '../levels/022.xml',
+        # '../levels/023.xml',
+        # '../levels/024.xml',
+        # '../levels/025.xml',
+        # '../levels/026.xml',
+        # '../levels/027.xml',
+        # '../levels/028.xml',
+        # '../levels/029.xml'
     ]
     for f in fileNames:
         start(f)
@@ -454,5 +501,33 @@ def doAllFiles():
 
 
 
+def isImpossible(filename):
+    started = time.process_time()
+    level = Level(filename)
+    graph = level.buildGraph()
+    squares = level.getSquares()
+    root = getRoot(graph)
+
+    msg = ''
+    if isSolvable(root,deepcopy(squares),deepcopy(graph)):
+        msg = 'LEVEL CAN BE SOLVED'
+    else:
+        msg = 'IMPOSSIBLE LEVEL'
+    elapsedTime = time.process_time() - started
+    print("%s: %s, %s" % (filename, elapsedTime, msg))
+
+
+# TODO: all the levels really all possible ?
+# TODO: why do I need 7 visits for some levels? Should not be more than 4
+# TODO: why do I not return the shortest solution when I increase MAX_STEPS? Debug using 002.xml
+# TODO: Use isSolved as basis to build path?
+def findAllPossibleLevels():
+    folderName = '../levels/'
+    for entry in os.scandir(folderName):
+        if entry.is_file():
+            isImpossible(entry.path)
+
+
 debug()
+#findAllPossibleLevels()
 #doAllFiles()
