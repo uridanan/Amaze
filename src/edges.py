@@ -28,7 +28,7 @@ from copy import deepcopy
 
 RIGHT, LEFT, UP, DOWN = 1,2,3,4
 DIRECTIONS = [RIGHT,DOWN,LEFT,UP]
-MAX_VISITS = 7
+MAX_VISITS = 2
 
 class Level:
     # 0=white square 1=black square.
@@ -114,10 +114,9 @@ class Level:
             self.visitableSquares[s] = self.visitableSquares[s] + 1
         n.originCount = n.originCount + 1
 
-        #print("Close Edge: %d,%d" % (e.start.id,e.end.id))
+        #log("Close Edge: %d,%d" % (e.start.id,e.end.id))
         return None
 
-    # TODO: BUG 00,15,00,00,00,19,00, counts as edge with squares [15,19]
     def processSquare(self,x,y,d,e):
         if self.squares[x][y] == 0:
             if e is not None:
@@ -158,14 +157,14 @@ class Level:
         return self.graph
 
     def findAllOrthogonalEdges(self):
-        #print("Search for orthogonal edges")
+        #log("Search for orthogonal edges")
         for e in list(self.edges.values()):
             self.findOrthogonalEdges(e)
 
     # Some nodes can only be starting nodes because they close an edge
     def findOrthogonalEdges(self,e):
         if e is None or e.end is None:
-            #print("ERROR ! Invalid open edge")
+            #log("ERROR ! Invalid open edge")
             return
 
         n = self.graph.get(e.end.id,None)
@@ -288,14 +287,14 @@ def noSolution(level,graph):
     # Find squares that are not traversed by any edge
     for i,v in level.visitableSquares.items():
         if v == 0:
-            print("Orphan Square")
+            log("Orphan Square")
             return True
 
     # Find orphan edges
     for i,e in level.edges.items():
         c = e.start.originCount
         if c == 0 and rootId < e.start.id:
-            print("Orphan Edge")
+            log("Orphan Edge")
             return True
 
     return False
@@ -304,12 +303,12 @@ def noSolution(level,graph):
 
 # Traverse all nodes without going back just to see if I can cover all the squares
 def isSolvable(root,squares,graph):
-    #print(path)
+    #log(path)
 
     # If graph is empty, we are done
     if safeLen(squares) == 0:
-        #print("Graph is empty")
-        #print("Solved by: %s " % path)
+        #log("Graph is empty")
+        #log("Solved by: %s " % path)
         return True
 
     # No more nodes but we haven't covered all squares
@@ -318,7 +317,7 @@ def isSolvable(root,squares,graph):
 
     # If root is none: error, should not happen
     if root is None:
-        print("ERROR ! Invalid root")
+        log("ERROR ! Invalid root")
         return False
 
     # If node is no longer in graph we were already here
@@ -341,41 +340,42 @@ def isSolvable(root,squares,graph):
 # Pop squares traversed by edges, not Nodes
 # Iterate edges, not neighbours
 def traverse(root,squares,path,graph,max):
-    #print(path)
+    log(path)
 
     # If graph is empty, we are done
     if safeLen(squares) == 0:
-        #print("Graph is empty")
-        print("Solved by: %s " % path)
+        #log("Graph is empty")
+        log("Solved by: %s " % path)
         return path
 
     if path is None:
-        #print("ERROR! Path is None")
+        #log("ERROR! Path is None")
         return None
 
     # If path exceeds limit or current solution, there is no solution here
     if safeLen(path) > max:
-        #print("Path exceeds limit")
+        #log("Path exceeds limit")
         return None
 
     # If root is none: error, should not happen
     if root is None:
-        #print("ERROR ! Invalid root")
+        #log("ERROR ! Invalid root")
         return None
 
     # We're stuck in a loop, no solution here
     if isStuckInLoop(path):
-        #print("ERROR ! Stuck in loop")
+        #log("ERROR ! Stuck in loop")
         return None
 
     # Visit the neighbours
     paths = {}
     reverse = None
-    for e in root.edges.values():
+    #for e in root.edges.values():
+    for e in rotateEdges(root.edges):
         if e.visited > MAX_VISITS: # if we've visited this edge too many times already we must be in a loop
             continue
-        elif safeLen(path) > 1 and e.dir == opposite(path[-1]):
-            # leave the return path for last
+        elif safeLen(path) > 0 and e.dir == opposite(path[-1]) and e.visited == 0:
+            # leave the return path for last, but only the first time around
             reverse = e
         else:
             # don't append on same instance otherwise it is shared between all siblings. i.e. siblings are queued instead of replacing each other
@@ -386,6 +386,7 @@ def traverse(root,squares,path,graph,max):
                 copyOfSquares.pop(s, None)
             e.visited = e.visited + 1
             paths[e.dir] = traverse(e.end,copyOfSquares,copyOfPath,graph,max)
+            e.visited = e.visited - 1
             if paths[e.dir] is not None and len(paths[e.dir]) < max:
                 max = len(paths[e.dir])
 
@@ -395,8 +396,11 @@ def traverse(root,squares,path,graph,max):
         copyOfPath = list(path)
         copyOfPath.append(e.dir)
         copyOfSquares = deepcopy(squares)
+        for s in e.squares:
+            copyOfSquares.pop(s, None)
         e.visited = e.visited + 1
         paths[e.dir] = traverse(e.end, copyOfSquares, copyOfPath, graph, max)
+        e.visited = e.visited - 1
         if paths[e.dir] is not None and len(paths[e.dir]) < max:
             max = len(paths[e.dir])
 
@@ -406,6 +410,42 @@ def traverse(root,squares,path,graph,max):
 
     return newpath
 
+#To give a fair chance to all paths, rotate the edges
+def rotateEdges(edges):
+    returnEdges = []
+    first = None
+    for e in edges.values():
+        if first is None and e.visited > 0:
+            first = e
+        else:
+            returnEdges.append(e)
+    if first is not None:
+        returnEdges.append(first)
+    return returnEdges
+
+
+#If any, start with an edge that hasn't been visited
+def findVirgin(edges,path):
+    for e in edges:
+        if e.visited == 0 and safeLen(path) == 0 or e.dir != opposite(path[-1]):
+            return e
+    return None
+
+
+#Sort the edges by least visited (hoping to fix level 9)
+def sortEdgesByLeastVisited(edges):
+    dictEdges = {}
+    for e in edges:
+        listofedges = dictEdges.get(e.visited,None)
+        if listofedges is None:
+            listofedges = []
+            dictEdges[e.visited] = listofedges
+        listofedges.append(e)
+    returnEdges = []
+    for k in sorted(dictEdges.keys()):
+        v = dictEdges.get(k,None)
+        returnEdges.extend(v)
+    return returnEdges
 
 
 def isStuckInLoop(path):
@@ -437,58 +477,58 @@ def safeLen(list):
 
 
 def start(filename):
-    MAX_STEPS = 50
+    MAX_STEPS = 25
     started = time.process_time()
     path = []
     level = Level(filename)
     graph = level.buildGraph()
     squares = level.getSquares()
     root = getRoot(graph)
-    # if noSolution(level,graph):
-    # if isSolvable(root,deepcopy(squares),deepcopy(graph)) is False:
-    #     path = None
-    # else:
-    #     path = traverse(root,squares,path,graph,MAX_STEPS)
-    path = traverse(root, squares, path, graph, MAX_STEPS)
+    if isSolvable(root,deepcopy(squares),deepcopy(graph)) is False:
+        path = None
+    else:
+        path = traverse(root,squares,path,graph,MAX_STEPS)
+    #path = traverse(root, squares, path, graph, MAX_STEPS)
     elapsedTime = time.process_time() - started
     print("%s: %s, %s" % (filename, elapsedTime, path))
-    #print("Done")
+    #log("Done")
 
 
 
 def debug():
     #cwd = os.getcwd()
     fileNames = [
-        # '../levels/001.xml',
-        '../levels/002.xml'
-        # '../levels/003.xml',
-        # '../levels/004.xml',
-        # '../levels/005.xml',
-        # '../levels/006.xml',
-        # '../levels/007.xml',
-        # '../levels/008.xml',
-        # '../levels/009.xml',
-        # '../levels/010.xml',
-        # '../levels/011.xml',
-        # '../levels/012.xml',
-        # '../levels/013.xml',
-        # '../levels/014.xml',
-        # '../levels/015.xml',
-        # '../levels/016.xml',
-        # '../levels/017.xml',
-        # '../levels/018.xml',
-        # '../levels/019.xml',
-        # '../levels/020.xml',
-        # '../levels/021.xml',
-        # '../levels/022.xml',
-        # '../levels/023.xml',
-        # '../levels/024.xml',
-        # '../levels/025.xml',
-        # '../levels/026.xml',
-        # '../levels/027.xml',
-        # '../levels/028.xml',
-        # '../levels/029.xml'
+        '../levels/001.xml',
+        '../levels/002.xml',
+        '../levels/003.xml',
+        '../levels/004.xml',
+        '../levels/005.xml',
+        '../levels/006.xml',
+        '../levels/007.xml',
+        '../levels/008.xml',
+        #'../levels/009.xml',
+        '../levels/010.xml',
+        '../levels/011.xml',
+        '../levels/012.xml',
+        '../levels/013.xml',
+        '../levels/014.xml',
+        '../levels/015.xml',
+        '../levels/016.xml',
+        #'../levels/017.xml',
+        #'../levels/018.xml',
+        '../levels/019.xml',
+        #'../levels/020.xml',
+        '../levels/021.xml',
+        '../levels/022.xml',
+        '../levels/023.xml',
+        '../levels/024.xml',
+        '../levels/025.xml',
+        '../levels/026.xml',
+        '../levels/027.xml',
+        '../levels/028.xml',
+        '../levels/029.xml'
     ]
+
     for f in fileNames:
         start(f)
 
@@ -517,17 +557,20 @@ def isImpossible(filename):
     print("%s: %s, %s" % (filename, elapsedTime, msg))
 
 
-# TODO: all the levels really all possible ?
-# TODO: why do I need 7 visits for some levels? Should not be more than 4
-# TODO: why do I not return the shortest solution when I increase MAX_STEPS? Debug using 002.xml
-# TODO: Use isSolved as basis to build path?
+
 def findAllPossibleLevels():
     folderName = '../levels/'
     for entry in os.scandir(folderName):
         if entry.is_file():
             isImpossible(entry.path)
 
+DEBUG = False
+def log(msg):
+    if DEBUG:
+        print(msg)
 
-debug()
+
+start('../levels/036.xml')
+#debug()
 #findAllPossibleLevels()
 #doAllFiles()
