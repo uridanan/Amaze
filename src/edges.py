@@ -21,12 +21,14 @@
 
 import xml.etree.ElementTree as ET
 import os
+import time
 from copy import deepcopy
+
 
 
 RIGHT, LEFT, UP, DOWN = 1,2,3,4
 DIRECTIONS = [RIGHT,DOWN,LEFT,UP]
-MAX_STEPS = 12
+MAX_STEPS = 100
 
 class Level:
     # 0=white square 1=black square.
@@ -92,7 +94,7 @@ class Level:
         e.end = n
         e.start.edges[e.getId()] = e
         self.edges[e.getId()] = e
-        print("Close Edge: %d,%d" % (e.start.id,e.end.id))
+        #print("Close Edge: %d,%d" % (e.start.id,e.end.id))
         return None
 
     def processSquare(self,x,y,d,e):
@@ -137,14 +139,14 @@ class Level:
 
     # TODO: Circular infinite loop: iterate edges while adding edges
     def findAllOrthogonalEdges(self):
-        print("Search for orthogonal edges")
+        #print("Search for orthogonal edges")
         for e in list(self.edges.values()):
             self.findOrthogonalEdges(e)
 
     # Some nodes can only be starting nodes because they close an edge
     def findOrthogonalEdges(self,e):
         if e is None or e.end is None:
-            print("ERROR ! Invalid open edge")
+            #print("ERROR ! Invalid open edge")
             return
 
         n = self.graph.get(e.end.id,None)
@@ -260,51 +262,37 @@ def getRoot(graph):
     return root
 
 
-def startBFS(graph):
-    r = getRoot(graph)
+def start(filename):
+    started = time.process_time()
     path = []
-    solution = bfs(graph,[r],path)
-
-
-def bfs(graph,nodes,path):
-    next = []
-    for n in nodes:
-        for e in n.edges:
-            next.append(e.end)
-    return path
-
-
-
-def start(graph,level):
-    path = []
+    level = Level(filename)
+    graph = level.buildGraph()
     squares = level.getSquares()
     root = getRoot(graph)
-    path = traverse(root,squares,path,graph)
-    print("Solution: %s" % path)
-    print("Done")
+    edge = Edge
+    path = traverse(root,squares,path,graph,MAX_STEPS)
+    elapsedTime = time.process_time() - started
+    print("%s: %s, %s" % (filename, elapsedTime, path))
+    #print("Done")
 
 
 # Pop squares traversed by edges, not Nodes
 # Iterate edges, not neighbours
-# TODO: Try BFS against DFS
-# TODO: Why won't it try [1,4,2,4,1,3,2,1,2,3,1] ?
-# TODO: find out why I have fake solutions
-# TODO: traverse edges, not nodes?
-def traverse(root,squares,path,graph):
+def traverse(root,squares,path,graph,max):
     #print(path)
 
     # If graph is empty, we are done
     if safeLen(squares) == 0:
         #print("Graph is empty")
-        print("Solved by: %s " % path)
+        #print("Solved by: %s " % path)
         return path
 
     if path is None:
         print("ERROR! Path is None")
         return None
 
-    # If path exceeds limit, there is no solution here
-    if safeLen(path) > MAX_STEPS:
+    # If path exceeds limit or current solution, there is no solution here
+    if safeLen(path) > max:
         #print("Path exceeds limit")
         return None
 
@@ -313,11 +301,8 @@ def traverse(root,squares,path,graph):
         print("ERROR ! Invalid root")
         return None
 
-    # Mark our visit here
-    found = squares.pop(root.id,None)
-
     # We're stuck in a loop, no solution here
-    if found is None and isStuckInLoop(path):
+    if isStuckInLoop(path):
         #print("ERROR ! Stuck in loop")
         return None
 
@@ -329,26 +314,32 @@ def traverse(root,squares,path,graph):
             # leave the return path for last
             reverse = e
         else:
-            for s in e.squares:
-                squares.pop(s, None)
             # don't append on same instance otherwise it is shared between all siblings. i.e. siblings are queued instead of replacing each other
-            p = list(path)
-            p.append(e.dir)
-            sq = deepcopy(squares)
-            paths[e.dir] = traverse(e.end,sq,p,graph)
+            copyOfPath = list(path)
+            copyOfPath.append(e.dir)
+            copyOfSquares = deepcopy(squares)
+            for s in e.squares:
+                copyOfSquares.pop(s, None)
+            paths[e.dir] = traverse(e.end,copyOfSquares,copyOfPath,graph,max)
+            if paths[e.dir] is not None and len(paths[e.dir]) < max:
+                max = len(paths[e.dir])
+
     # Process the return edge
     if reverse is not None:
         e = reverse
-        p = list(path)
-        p.append(e.dir)
-        sq = deepcopy(squares)
-        paths[e.dir] = traverse(e.end, sq, p, graph)
+        copyOfPath = list(path)
+        copyOfPath.append(e.dir)
+        copyOfSquares = deepcopy(squares)
+        paths[e.dir] = traverse(e.end, copyOfSquares, copyOfPath, graph, max)
+        if paths[e.dir] is not None and len(paths[e.dir]) < max:
+            max = len(paths[e.dir])
 
     newpath = None
     for p in paths.values():
         newpath = shorter(newpath, p)
 
     return newpath
+
 
 
 def isStuckInLoop(path):
@@ -384,10 +375,16 @@ def safeLen(list):
 # TODO: identify loops on the fly?
 # TODO: is visited useless?
 def debug():
-    cwd = os.getcwd()
-    level1 = Level('../levels/007.xml')
-    root = level1.buildGraph()
-    start(root,level1)
+    #cwd = os.getcwd()
+    start('../levels/007.xml')
     print('stop')
 
-debug()
+def doAllFiles():
+    folderName = '../levels/'
+    for entry in os.scandir(folderName):
+        if entry.is_file():
+            start(entry.path)
+
+
+# debug()
+doAllFiles()
