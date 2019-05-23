@@ -28,13 +28,13 @@ from copy import deepcopy
 
 RIGHT, LEFT, UP, DOWN = 1,2,3,4
 DIRECTIONS = [RIGHT,DOWN,LEFT,UP]
-MAX_STEPS = 100
 
 class Level:
     # 0=white square 1=black square.
     # The ball moves on black squares
     # x is the index of the row, y the index of the column
     squares = None
+    visitableSquares = None
     width = 0
     height = 0
     data = None
@@ -56,14 +56,25 @@ class Level:
     def initSquares(self):
         #  d = [ [ None for y in range( 2 ) ] for x in range( 2 ) ]
         squares = [[None for y in range(self.width)] for x in range(self.height)]
+        self.visitableSquares = {}
         values = self.data.split(',')
         i = 0
         for v in values:
             x = i // self.width
             y = i - x*self.width
             squares[x][y] = int(v)
+            if squares[x][y] > 0:
+                self.visitableSquares[self.id(x,y)] = 0 # value is the number of edges that can visit the square
             i=i+1
         self.squares = squares
+
+    def getSquares(self):
+        # squares = {}
+        # for x in range(self.height):
+        #     for y in range(self.width):
+        #         if self.squares[x][y] > 0:
+        #             squares[self.id(x,y)] = 1
+        return self.visitableSquares
 
     def id(self,x,y):
         return x*self.width + y
@@ -90,20 +101,28 @@ class Level:
         return e
 
     def closeEdge(self,x,y,e):
+        if safeLen(e.squares) < 2:
+            return None
         n = self.getNode(x, y)
         e.end = n
         e.start.edges[e.getId()] = e
         self.edges[e.getId()] = e
+
+        #Mark squares and nodes to find lonely ones
+        for s in e.squares:
+            self.visitableSquares[s] = self.visitableSquares[s] + 1
+        n.originCount = n.originCount + 1
+
         #print("Close Edge: %d,%d" % (e.start.id,e.end.id))
         return None
 
+    # TODO: BUG 00,15,00,00,00,19,00, counts as edge with squares [15,19]
     def processSquare(self,x,y,d,e):
         if self.squares[x][y] == 0:
             if e is not None:
                 # create a node for the previous square and close the edge
                 ex,ey = Node(id,x,y).peek(opposite(d))
-                if safeLen(e.squares) > 1:
-                    e = self.closeEdge(ex,ey,e)
+                e = self.closeEdge(ex, ey, e)
         else:
             if e is None:
                 # create a new node and edge
@@ -137,7 +156,6 @@ class Level:
 
         return self.graph
 
-    # TODO: Circular infinite loop: iterate edges while adding edges
     def findAllOrthogonalEdges(self):
         #print("Search for orthogonal edges")
         for e in list(self.edges.values()):
@@ -182,15 +200,6 @@ class Level:
                     x,y = z,n.y
                 orth = self.processSquare(x, y, d, orth)
 
-    def getSquares(self):
-        squares = {}
-        for x in range(self.height):
-            for y in range(self.width):
-                if self.squares[x][y] > 0:
-                    squares[self.id(x,y)] = 1
-        return squares
-
-
 
 
 def swap(x,y,d):
@@ -215,13 +224,14 @@ class Node:
     x = -1
     y =-1
     edges = None
-
+    originCount = 0
 
     def __init__(self,id,x,y):
         self.id = id
         self.x = x
         self.y = y
         self.edges = dict()
+        self.originCount = 0
 
     def peek(self,direction):
         switcher = {
@@ -263,17 +273,45 @@ def getRoot(graph):
 
 
 def start(filename):
+    MAX_STEPS = 25
     started = time.process_time()
     path = []
     level = Level(filename)
     graph = level.buildGraph()
     squares = level.getSquares()
     root = getRoot(graph)
-    edge = Edge
-    path = traverse(root,squares,path,graph,MAX_STEPS)
+    if noSolution(level,graph):
+        path = None
+    else:
+        path = traverse(root,squares,path,graph,MAX_STEPS)
     elapsedTime = time.process_time() - started
     print("%s: %s, %s" % (filename, elapsedTime, path))
     #print("Done")
+
+
+# Find unsolvable levels
+# If the logs show that this never returns True remove it
+def noSolution(level,graph):
+
+    if level.edges is None or graph is None or len(graph.keys()) < 1:
+        return True
+
+    rootId = min(graph.keys())
+
+    # Find squares that are not traversed by any edge
+    for i,v in level.visitableSquares.items():
+        if v == 0:
+            print("Orphan Square")
+            return True
+
+    # Find orphan edges
+    for i,e in level.edges.items():
+        c = e.start.originCount
+        if c == 0 and rootId < e.start.id:
+            print("Orphan Edge")
+            return True
+
+    return False
 
 
 # Pop squares traversed by edges, not Nodes
@@ -370,14 +408,43 @@ def safeLen(list):
     return len(list)
 
 
-# TODO: make sure not to include nodes / neigbours in the graph when you can't stop on them
-# TODO: use MAX_STEPS as a parameter to find the solution faster
-# TODO: identify loops on the fly?
-# TODO: is visited useless?
+# TODO: find more ways to identify unsolvable levels
 def debug():
     #cwd = os.getcwd()
-    start('../levels/007.xml')
-    print('stop')
+    fileNames = [
+        '../levels/001.xml',
+        '../levels/002.xml',
+        '../levels/003.xml',
+        '../levels/004.xml',
+        '../levels/005.xml',
+        '../levels/006.xml',
+        '../levels/007.xml',
+        '../levels/008.xml',
+        '../levels/009.xml',
+        '../levels/010.xml',
+        '../levels/011.xml',
+        '../levels/012.xml',
+        '../levels/013.xml',
+        '../levels/014.xml',
+        '../levels/015.xml',
+        '../levels/016.xml',
+        '../levels/017.xml',
+        '../levels/018.xml',
+        '../levels/019.xml',
+        '../levels/020.xml',
+        '../levels/021.xml',
+        '../levels/022.xml',
+        '../levels/023.xml',
+        '../levels/024.xml',
+        '../levels/025.xml',
+        '../levels/026.xml',
+        '../levels/027.xml',
+        '../levels/028.xml',
+        '../levels/029.xml'
+    ]
+    for f in fileNames:
+        start(f)
+
 
 def doAllFiles():
     folderName = '../levels/'
@@ -386,5 +453,6 @@ def doAllFiles():
             start(entry.path)
 
 
-# debug()
-doAllFiles()
+
+debug()
+#doAllFiles()
