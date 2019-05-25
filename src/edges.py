@@ -30,6 +30,54 @@ RIGHT, LEFT, UP, DOWN = 1,2,3,4
 DIRECTIONS = [RIGHT,DOWN,LEFT,UP]
 MAX_VISITS = 2
 
+
+class Node:
+    id = -1
+    x = -1
+    y =-1
+    edges = None
+    originCount = 0
+
+    def __init__(self,id,x,y):
+        self.id = id
+        self.x = x
+        self.y = y
+        self.edges = dict()
+        self.originCount = 0
+
+    def peek(self,direction):
+        switcher = {
+            RIGHT: [self.x, self.y + 1],
+            LEFT: [self.x, self.y - 1],
+            UP: [self.x - 1, self.y],
+            DOWN: [self.x + 1, self.y]
+        }
+        return switcher[direction]
+
+
+class Edge:
+    start = None  # a node
+    end = None  # a node
+    dir = None  # a direction
+    squares = None  # a list of square Ids
+    visited = 0
+
+    def __init__(self,node,d):
+        self.start = node
+        self.dir = d
+        self.end = None
+        self.squares = []
+        self.visited = 0
+
+    def getId(self):
+        s = e = -1
+        if self.start is not None:
+            s = self.start.id
+        if self.end is not None:
+            e = self.end.id
+        return (s,e)
+
+
 class Level:
     # 0=white square 1=black square.
     # The ball moves on black squares
@@ -219,53 +267,6 @@ def opposite(direction):
     return switcher.get(direction,0)
     
 
-class Node:
-    id = -1
-    x = -1
-    y =-1
-    edges = None
-    originCount = 0
-
-    def __init__(self,id,x,y):
-        self.id = id
-        self.x = x
-        self.y = y
-        self.edges = dict()
-        self.originCount = 0
-
-    def peek(self,direction):
-        switcher = {
-            RIGHT: [self.x, self.y + 1],
-            LEFT: [self.x, self.y - 1],
-            UP: [self.x - 1, self.y],
-            DOWN: [self.x + 1, self.y]
-        }
-        return switcher[direction]
-
-
-class Edge:
-    start = None  # a node
-    end = None  # a node
-    dir = None  # a direction
-    squares = None  # a list of square Ids
-    visited = 0
-
-    def __init__(self,node,d):
-        self.start = node
-        self.dir = d
-        self.end = None
-        self.squares = []
-        self.visited = 0
-
-    def getId(self):
-        s = e = -1
-        if self.start is not None:
-            s = self.start.id
-        if self.end is not None:
-            e = self.end.id
-        return (s,e)
-
-
 def getRoot(graph):
     if graph is None or len(graph.keys()) < 1:
         return None
@@ -274,9 +275,7 @@ def getRoot(graph):
     return root
 
 
-
 # Find unsolvable levels
-# If the logs show that this never returns True remove it
 def noSolution(level,graph):
 
     if level.edges is None or graph is None or len(graph.keys()) < 1:
@@ -303,8 +302,6 @@ def noSolution(level,graph):
 
 # Traverse all nodes without going back just to see if I can cover all the squares
 def isSolvable(root,squares,graph):
-    #log(path)
-
     # If graph is empty, we are done
     if safeLen(squares) == 0:
         #log("Graph is empty")
@@ -370,9 +367,8 @@ def traverse(root,squares,path,graph,max):
     # Visit the neighbours
     paths = {}
     reverse = None
-    #for e in root.edges.values():
     for e in rotateEdges(root.edges):
-        if e.visited > MAX_VISITS: # if we've visited this edge too many times already we must be in a loop
+        if e.visited > safeLen(root.edges.values()):  #if we've visited this edge too many times already we must be in a loop
             continue
         elif safeLen(path) > 0 and e.dir == opposite(path[-1]) and e.visited == 0:
             # leave the return path for last, but only the first time around
@@ -410,6 +406,7 @@ def traverse(root,squares,path,graph,max):
 
     return newpath
 
+
 #To give a fair chance to all paths, rotate the edges
 def rotateEdges(edges):
     returnEdges = []
@@ -421,30 +418,6 @@ def rotateEdges(edges):
             returnEdges.append(e)
     if first is not None:
         returnEdges.append(first)
-    return returnEdges
-
-
-#If any, start with an edge that hasn't been visited
-def findVirgin(edges,path):
-    for e in edges:
-        if e.visited == 0 and safeLen(path) == 0 or e.dir != opposite(path[-1]):
-            return e
-    return None
-
-
-#Sort the edges by least visited (hoping to fix level 9)
-def sortEdgesByLeastVisited(edges):
-    dictEdges = {}
-    for e in edges:
-        listofedges = dictEdges.get(e.visited,None)
-        if listofedges is None:
-            listofedges = []
-            dictEdges[e.visited] = listofedges
-        listofedges.append(e)
-    returnEdges = []
-    for k in sorted(dictEdges.keys()):
-        v = dictEdges.get(k,None)
-        returnEdges.extend(v)
     return returnEdges
 
 
@@ -498,35 +471,65 @@ def start(filename):
 def debug():
     #cwd = os.getcwd()
     fileNames = [
-        '../levels/001.xml',
-        '../levels/002.xml',
-        '../levels/003.xml',
-        '../levels/004.xml',
-        '../levels/005.xml',
-        '../levels/006.xml',
-        '../levels/007.xml',
-        '../levels/008.xml',
-        #'../levels/009.xml',
-        '../levels/010.xml',
-        '../levels/011.xml',
-        '../levels/012.xml',
-        '../levels/013.xml',
-        '../levels/014.xml',
-        '../levels/015.xml',
-        '../levels/016.xml',
-        #'../levels/017.xml',
-        #'../levels/018.xml',
-        '../levels/019.xml',
-        #'../levels/020.xml',
-        '../levels/021.xml',
-        '../levels/022.xml',
-        '../levels/023.xml',
-        '../levels/024.xml',
-        '../levels/025.xml',
-        '../levels/026.xml',
-        '../levels/027.xml',
-        '../levels/028.xml',
-        '../levels/029.xml'
+        # '../levels/001.xml',
+        # '../levels/002.xml',
+        # '../levels/003.xml',
+        # '../levels/004.xml',
+        # '../levels/005.xml',
+        # '../levels/006.xml',
+        # '../levels/007.xml',
+        # '../levels/008.xml',
+        # '../levels/009.xml',
+        # '../levels/010.xml',
+        # '../levels/011.xml',
+        # '../levels/012.xml',
+        # '../levels/013.xml',
+        # '../levels/014.xml',
+        # '../levels/015.xml',
+        # '../levels/016.xml',
+        # #'../levels/017.xml',
+        # #'../levels/018.xml',
+        # '../levels/019.xml',
+        # #'../levels/020.xml',
+        # '../levels/021.xml',
+        # '../levels/022.xml',
+        # '../levels/023.xml',
+        # '../levels/024.xml',
+        # '../levels/025.xml',
+        # '../levels/026.xml',
+        # '../levels/027.xml',
+        # '../levels/028.xml',
+        # '../levels/029.xml',
+        '../levels/030.xml',
+        '../levels/031.xml',
+        '../levels/032.xml',
+        '../levels/033.xml',
+        '../levels/034.xml',
+        '../levels/035.xml',
+        '../levels/036.xml',
+        '../levels/037.xml',
+        '../levels/038.xml',
+        '../levels/039.xml',
+        '../levels/040.xml',
+        '../levels/041.xml',
+        '../levels/042.xml',
+        '../levels/043.xml',
+        '../levels/044.xml',
+        '../levels/045.xml',
+        '../levels/046.xml',
+        '../levels/047.xml',
+        '../levels/048.xml',
+        '../levels/049.xml',
+        '../levels/050.xml',
+        '../levels/051.xml',
+        '../levels/052.xml',
+        '../levels/053.xml',
+        '../levels/054.xml',
+        '../levels/055.xml',
+        '../levels/056.xml',
+        '../levels/057.xml',
+        '../levels/058.xml',
+        '../levels/059.xml'
     ]
 
     for f in fileNames:
@@ -564,13 +567,28 @@ def findAllPossibleLevels():
         if entry.is_file():
             isImpossible(entry.path)
 
+
+def printSquares(filename):
+    level = Level(filename)
+    for x in range(level.height):
+        line = ''
+        for y in range(level.width):
+            v = 0
+            if level.squares[x][y] > 0:
+                v = level.id(x,y)
+            line = ','.join([line,str(v).zfill(3)])
+        # line = ','.join([line, '\n'])
+        print(line)
+
+
 DEBUG = False
 def log(msg):
     if DEBUG:
         print(msg)
 
 
-start('../levels/036.xml')
-#debug()
+#printSquares('../levels/017.xml')
+#start('../levels/009.xml')
+debug()
 #findAllPossibleLevels()
 #doAllFiles()
